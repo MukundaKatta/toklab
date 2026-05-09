@@ -1,0 +1,23 @@
+[package]
+name = "toklab-core"
+description = "Pure-Rust core for toklab: bulk tokenizer + counter for OpenAI BPE encodings."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+tiktoken-rs = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+rayon = { workspace = true }
+
+[lib]
+path = "src/lib.rs"

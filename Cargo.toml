@@ -1,0 +1,30 @@
+[workspace]
+members = ["crates/toklab-core", "crates/toklab-py"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Mukunda Katta"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+repository = "https://github.com/MukundaKatta/toklab"
+homepage = "https://github.com/MukundaKatta/toklab"
+documentation = "https://docs.rs/toklab-core"
+readme = "README.md"
+keywords = ["tokenizer", "tiktoken", "bpe", "llm", "openai"]
+categories = ["text-processing", "science"]
+
+[workspace.dependencies]
+# tiktoken-rs handles the actual BPE encoding for OpenAI / o200k / cl100k
+# models. Bundles the encoding tables; no network at runtime.
+tiktoken-rs = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+# Used for parallel batch counting via rayon when callers ask for it.
+rayon = "1.10"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
