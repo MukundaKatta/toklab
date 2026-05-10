@@ -42,15 +42,23 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
-    /// Construct from an OpenAI model name (`"gpt-4"`, `"gpt-4o"`, etc.)
-    /// using `tiktoken_rs::get_bpe_from_model`.
+    /// Construct from an OpenAI model name (`"gpt-4"`, `"gpt-4o"`,
+    /// `"gpt-4.1"`, `"gpt-5"`, etc.). Tries `tiktoken_rs::get_bpe_from_model`
+    /// first; if that fails (the model is too new for the bundled
+    /// mapping), falls back to encoding inference via name pattern.
     pub fn for_model(model: &str) -> Result<Self> {
-        let bpe = tiktoken_rs::get_bpe_from_model(model)
-            .map_err(|e| TokenizerError::Tiktoken(e.to_string()))?;
-        Ok(Self {
-            bpe,
-            encoding_name: encoding_for_model(model).to_string(),
-        })
+        match tiktoken_rs::get_bpe_from_model(model) {
+            Ok(bpe) => Ok(Self {
+                bpe,
+                encoding_name: encoding_for_model(model).to_string(),
+            }),
+            Err(_) => {
+                // Fallback: route by name pattern to the right base encoding.
+                // Catches future model names tiktoken-rs hasn't enumerated.
+                let encoding = encoding_for_model(model);
+                Self::for_encoding(encoding)
+            }
+        }
     }
 
     /// Construct from an encoding name. Accepts `"cl100k_base"` and
@@ -132,11 +140,22 @@ impl Tokenizer {
 }
 
 /// Map an OpenAI model name to its encoding name. Used for diagnostics so
-/// callers can see which encoding their model resolved to.
+/// callers can see which encoding their model resolved to. Conservative
+/// when the family is unknown — defaults to `cl100k_base`, which is the
+/// safer "older" encoding to over-count tokens against.
 fn encoding_for_model(model: &str) -> &'static str {
-    if model.starts_with("gpt-4o") || model.starts_with("o1") || model.starts_with("o3") {
+    // Newer reasoning + multimodal families use o200k_base.
+    if model.starts_with("gpt-4o")
+        || model.starts_with("gpt-5")
+        || model.starts_with("o1")
+        || model.starts_with("o3")
+        || model.starts_with("o4")
+        || model.starts_with("chatgpt-4o")
+    {
         "o200k_base"
     } else {
+        // gpt-4, gpt-4.1 (cl100k for now per OpenAI), gpt-3.5*, and
+        // text-embedding-3-* all sit on cl100k_base.
         "cl100k_base"
     }
 }
@@ -173,6 +192,28 @@ mod tests {
     #[test]
     fn for_model_gpt4_is_cl100k() {
         let tok = Tokenizer::for_model("gpt-4").unwrap();
+        assert_eq!(tok.encoding_name(), "cl100k_base");
+    }
+
+    #[test]
+    fn for_model_gpt5_is_o200k() {
+        // gpt-5 may not exist in tiktoken-rs's mapping; we should still
+        // resolve via the encoding_for_model fallback.
+        let tok = Tokenizer::for_model("gpt-5").unwrap();
+        assert_eq!(tok.encoding_name(), "o200k_base");
+    }
+
+    #[test]
+    fn for_model_o3_is_o200k() {
+        let tok = Tokenizer::for_model("o3-mini").unwrap();
+        assert_eq!(tok.encoding_name(), "o200k_base");
+    }
+
+    #[test]
+    fn for_model_unknown_falls_back_to_cl100k() {
+        // Truly unknown family (won't be in tiktoken-rs mapping); fallback
+        // routes to cl100k_base because it doesn't match the o200k prefixes.
+        let tok = Tokenizer::for_model("future-model-7b").unwrap();
         assert_eq!(tok.encoding_name(), "cl100k_base");
     }
 
