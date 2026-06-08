@@ -82,6 +82,23 @@ def test_truncate_to_shrinks_long_text() -> None:
     assert len(out) < len(text)
 
 
+def test_truncate_to_zero_is_empty() -> None:
+    t = Tokenizer.for_model("gpt-4")
+    assert t.truncate_to("hello world", budget=0) == ""
+
+
+def test_truncate_to_mid_multibyte_char_is_safe() -> None:
+    # Cutting between the BPE tokens of a multi-byte character must not raise
+    # an invalid-UTF-8 error; the result stays within budget and is valid.
+    t = Tokenizer.for_model("gpt-4")
+    text = "你好世界 🌍"
+    full = t.count(text)
+    for budget in range(full + 1):
+        out = t.truncate_to(text, budget=budget)
+        assert t.count(out) <= budget
+    assert t.truncate_to(text, budget=full) == text
+
+
 def test_unknown_encoding_rejected() -> None:
     with pytest.raises(ValueError, match="unknown encoding"):
         Tokenizer.for_encoding("not_a_thing")

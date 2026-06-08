@@ -15,7 +15,6 @@ categories.workspace = true
 
 [dependencies]
 tiktoken-rs = { workspace = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true }
 

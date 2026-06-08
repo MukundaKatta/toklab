@@ -122,20 +122,31 @@ impl Tokenizer {
         self.count(text) <= budget
     }
 
-    /// Encode `text`, truncate to the first `budget` tokens, and decode back.
-    /// If `text` already fits, returns it unchanged. Boundary handling is
-    /// whatever tiktoken-rs's `decode` does on a mid-token cut, which is
-    /// well-defined for cl100k/o200k since each token decodes to a complete
-    /// UTF-8 sequence in the merged-vocabulary case.
+    /// Encode `text`, truncate to (at most) the first `budget` tokens, and
+    /// decode back. If `text` already fits, returns it unchanged.
+    ///
+    /// A naive truncation can split a multi-byte UTF-8 character across the
+    /// token boundary (a single CJK character or emoji is often several BPE
+    /// tokens), so decoding the raw prefix would fail with an invalid-UTF-8
+    /// error. To keep the helper safe on all inputs, we drop trailing tokens
+    /// until the remaining prefix decodes cleanly. The result therefore holds
+    /// at most `budget` tokens and is always valid UTF-8.
     pub fn truncate_to(&self, text: &str, budget: usize) -> Result<String> {
-        let mut tokens = self.bpe.encode_ordinary(text);
+        let tokens = self.bpe.encode_ordinary(text);
         if tokens.len() <= budget {
             return Ok(text.to_string());
         }
-        tokens.truncate(budget);
-        self.bpe
-            .decode(tokens)
-            .map_err(|e| TokenizerError::Tiktoken(e.to_string()))
+        // Try the largest prefix first; on a mid-character cut, shrink by one
+        // token at a time. An empty prefix always decodes to "", so this
+        // terminates.
+        let mut len = budget;
+        loop {
+            match self.bpe.decode(tokens[..len].to_vec()) {
+                Ok(s) => return Ok(s),
+                Err(_) if len > 0 => len -= 1,
+                Err(e) => return Err(TokenizerError::Tiktoken(e.to_string())),
+            }
+        }
     }
 }
 
@@ -240,6 +251,30 @@ mod tests {
         let truncated = tok.truncate_to(text, 2).unwrap();
         assert!(tok.count(&truncated) <= 2);
         assert!(truncated.len() <= text.len());
+    }
+
+    #[test]
+    fn truncate_mid_multibyte_char_stays_valid_utf8() {
+        // A single CJK character is several BPE tokens; cutting between them
+        // must not yield invalid UTF-8. The result stays within budget and
+        // always decodes cleanly.
+        let tok = Tokenizer::for_encoding("cl100k_base").unwrap();
+        let text = "你好世界";
+        let full = tok.count(text);
+        for budget in 0..=full {
+            let out = tok.truncate_to(text, budget).unwrap();
+            assert!(tok.count(&out) <= budget, "budget {budget} exceeded");
+            // Truncating to the full count returns the whole string.
+            if budget >= full {
+                assert_eq!(out, text);
+            }
+        }
+    }
+
+    #[test]
+    fn truncate_to_zero_is_empty() {
+        let tok = Tokenizer::for_encoding("cl100k_base").unwrap();
+        assert_eq!(tok.truncate_to("hello world", 0).unwrap(), "");
     }
 
     #[test]

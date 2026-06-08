@@ -19,8 +19,6 @@ categories = ["text-processing", "science"]
 # tiktoken-rs handles the actual BPE encoding for OpenAI / o200k / cl100k
 # models. Bundles the encoding tables; no network at runtime.
 tiktoken-rs = "0.6"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 thiserror = "2.0"
 # Used for parallel batch counting via rayon when callers ask for it.
 rayon = "1.10"

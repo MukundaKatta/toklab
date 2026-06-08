@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-05-10
+### Fixed
+- `truncate_to` no longer raises an invalid-UTF-8 error when the token
+  budget falls in the middle of a multi-byte character (common with CJK
+  text and emoji). It now drops trailing tokens until the prefix decodes
+  cleanly, returning a valid string of at most `budget` tokens.
+
+### Changed
+- Dropped the unused `serde` / `serde_json` dependencies from `toklab-core`,
+  trimming the build and published dependency tree.
 
 ### Added
 - `Tokenizer::for_model` now falls back to encoding-name routing when
